@@ -1,4 +1,10 @@
 # CI: сборка и тесты на push/PR; pack и push в NuGet только при теге v* с ветки release.
+#
+# Чтобы запустить CI по тегу:
+#   1. Убедись, что .github/workflows/ci.yml закоммичен и запушен.
+#   2. Создай тег: git tag v1.0.0
+#   3. Запушь тег: git push origin v1.0.0  (без push тег не уйдёт на GitHub — ничего не запустится).
+# Pack/NuGet push выполнится только если тег стоит на ветке release.
 
 name: CI
 
@@ -52,22 +58,19 @@ jobs:
             echo "on_release=true" >> $GITHUB_OUTPUT
           else
             echo "on_release=false" >> $GITHUB_OUTPUT
-            echo "Tag ${{ github.ref }} is not on branch ${{ env.RELEASE_BRANCH }}. Skipping pack and NuGet push."
+            echo "Tag ${{ github.ref }} is not on branch ${{ env.RELEASE_BRANCH }}. NuGet push will be skipped (artifacts still built)."
           fi
 
       - name: Install .NET SDK
-        if: steps.check-release.outputs.on_release == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
       - name: Set version from tag
-        if: steps.check-release.outputs.on_release == 'true'
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Pack
-        if: steps.check-release.outputs.on_release == 'true'
         run: |
           dotnet restore Lite.Procedures.sln
           dotnet pack Lite.Procedures.sln -c Release -o out \
@@ -75,7 +78,6 @@ jobs:
             --no-restore
 
       - name: Upload NuGet packages
-        if: steps.check-release.outputs.on_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
