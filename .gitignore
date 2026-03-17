@@ -4,3 +4,12 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 .idea/
+
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+**/BenchmarkDotNet.Artifacts/
+
+# Logs
+*.log
+**/*-report.html
+**/*-report.csv
