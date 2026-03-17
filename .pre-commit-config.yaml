@@ -1,0 +1,35 @@
+# Pre-commit: форматирование, сборка, тесты перед коммитом
+# Установка: pre-commit install
+# Запуск вручную: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format (verify)
+        entry: dotnet format --verify-no-changes --verbosity diagnostic
+        language: system
+        pass_filenames: false
+        files: \.(cs|csproj|sln)$
+
+      - id: dotnet-build
+        name: dotnet build
+        entry: dotnet build Lite.Procedures.sln -c Release
+        language: system
+        pass_filenames: false
+
+      - id: dotnet-test
+        name: dotnet test
+        entry: dotnet test Lite.Procedures.sln -c Release --no-build
+        language: system
+        pass_filenames: false
+
+  # Опционально: CSharpier вместо dotnet format (раскомментировать и поставить dotnet tool install -g csharpier)
+  # - repo: local
+  #   hooks:
+  #     - id: csharpier
+  #       name: CSharpier
+  #       entry: dotnet csharpier .
+  #       language: system
+  #       pass_filenames: false
+  #       files: \.cs$

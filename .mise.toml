@@ -1,0 +1,10 @@
+# mise (или rtx): версии .NET и инструментов
+# Установка: https://mise.jdx.dev/
+# После: mise install
+
+[tools]
+dotnet = "10"
+
+[env]
+# для pre-commit (если ставится через pip/uv)
+# ".venv" = "."

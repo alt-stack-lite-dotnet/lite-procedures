@@ -1,4 +1,4 @@
-﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
@@ -22,6 +22,11 @@ BenchmarkRunner.Run<RealWorldInterceptorsBenchmarks>();
 BenchmarkRunner.Run<LiteProceduresVsMediatRBenchmarks>();
 BenchmarkRunner.Run<LiteProceduresVsMessagePipeBenchmarks>();
 BenchmarkRunner.Run<ConcurrentBenchmarks>();
+BenchmarkRunner.Run<KillerComparisonBenchmarks>();
+BenchmarkRunner.Run<Per10kRequestsBenchmarks>();
+BenchmarkRunner.Run<StructVsClassBenchmarks>();
+BenchmarkRunner.Run<GeneratedVsManualPipelineBenchmarks>();
+BenchmarkRunner.Run<MessagePipeComparisonBenchmarks>();
 
 namespace Lite.Procedures.Benchmark
 {
@@ -186,10 +191,11 @@ namespace Lite.Procedures.Benchmark
         public void Setup()
         {
             var services = new ServiceCollection();
-            services.AddLiteProcedures(b => b
-                .AddGlobalInterceptor<NoOpAsyncInterceptor>()
-                .AddGlobalInterceptor<NoOpSyncInterceptor>()
-                .AddProcedure<NoOpAsyncProcedure>());
+            services.AddLiteProcedures(b =>
+            {
+                b.AddGlobalInterceptor<NoOpAsyncInterceptor>().AddGlobalInterceptor<NoOpSyncInterceptor>().AddProcedure<NoOpAsyncProcedure>();
+                b.Build();
+            });
 
             _sp = services.BuildServiceProvider();
             _directRef = _sp.GetRequiredService<IAsyncProcedure<string, string>>();

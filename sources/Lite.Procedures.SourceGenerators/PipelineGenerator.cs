@@ -202,11 +202,11 @@ namespace Lite.Procedures.SourceGenerators
             sb.AppendLine("    {");
             sb.AppendLine($"        private readonly {procedureInterface} _procedure;");
             for (var i = 0; i < interceptorTypes.Count; i++)
-                sb.AppendLine($"        private readonly {TypeToCSharp(interceptorTypes[i])} _i{i};");
+                sb.Append("        private readonly IProcedureInterceptorCore _i").Append(i).AppendLine(";");
             sb.AppendLine();
             sb.Append("        public ").Append(className).Append($"({procedureInterface} procedure");
             for (var i = 0; i < interceptorTypes.Count; i++)
-                sb.Append($", {TypeToCSharp(interceptorTypes[i])} i{i}");
+                sb.Append(", IProcedureInterceptorCore i").Append(i);
             sb.AppendLine(")");
             sb.AppendLine("        {");
             sb.AppendLine("            _procedure = procedure;");
@@ -236,15 +236,14 @@ namespace Lite.Procedures.SourceGenerators
             sb.AppendLine($"        private OneOf<{resultName}, Exception> RunAfter({argsName} arguments, int completedCount, OneOf<{resultName}, Exception> resultOrException)");
             sb.AppendLine("        {");
             sb.AppendLine("            var r = resultOrException;");
-            sb.AppendLine("            for (var i = completedCount - 1; i >= 0; i--)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            for (var i = 0; i < interceptorTypes.Count; i++)
-                sb.AppendLine($"                    if (i == {i}) r = _i{i}.InvokeAfter(arguments, r);");
-            sb.AppendLine("                }");
-            sb.AppendLine("                catch (Exception ex) { return ex!; }");
-            sb.AppendLine("            }");
+            for (var idx = interceptorTypes.Count - 1; idx >= 0; idx--)
+            {
+                sb.AppendLine($"            if (completedCount > {idx})");
+                sb.AppendLine("            {");
+                sb.AppendLine("                try { r = ((IProcedureInterceptor<{argsName}, {resultName}>)_i{idx}).InvokeAfter(arguments, r); }");
+                sb.AppendLine("                catch (Exception ex) { return ex!; }");
+                sb.AppendLine("            }");
+            }
             sb.AppendLine("            return r;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
@@ -259,11 +258,11 @@ namespace Lite.Procedures.SourceGenerators
             sb.AppendLine("    {");
             sb.AppendLine($"        private readonly {procedureInterface} _procedure;");
             for (var i = 0; i < interceptorTypes.Count; i++)
-                sb.AppendLine($"        private readonly {TypeToCSharp(interceptorTypes[i])} _i{i};");
+                sb.Append("        private readonly IProcedureInterceptorCore _i").Append(i).AppendLine(";");
             sb.AppendLine();
             sb.Append("        public ").Append(className).Append($"({procedureInterface} procedure");
             for (var i = 0; i < interceptorTypes.Count; i++)
-                sb.Append($", {TypeToCSharp(interceptorTypes[i])} i{i}");
+                sb.Append(", IProcedureInterceptorCore i").Append(i);
             sb.AppendLine(")");
             sb.AppendLine("        {");
             sb.AppendLine("            _procedure = procedure;");
@@ -291,34 +290,34 @@ namespace Lite.Procedures.SourceGenerators
             sb.AppendLine($"        private async ValueTask<OneOf<{resultName}, Exception>> RunAfterAsync({argsName} arguments, int completedCount, OneOf<Success, {resultName}, Exception> beforeResult, CancellationToken ct)");
             sb.AppendLine("        {");
             sb.AppendLine($"            OneOf<{resultName}, Exception> r = beforeResult.IsT1 ? beforeResult.AsT1 : (beforeResult.IsT2 ? beforeResult.AsT2 : default);");
-            sb.AppendLine("            for (var i = completedCount - 1; i >= 0; i--)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                try {");
-            for (var i = 0; i < interceptorTypes.Count; i++)
+            for (var idx = interceptorTypes.Count - 1; idx >= 0; idx--)
             {
-                sb.AppendLine($"                    if (i == {i}) r = _i{i} is IAsyncProcedureInterceptor<{argsName}, {resultName}> ai{i}");
-                sb.AppendLine($"                        ? await ai{i}.InvokeAfterExecutionAsync(arguments, r, ct)");
-                sb.AppendLine($"                        : ((IProcedureInterceptor<{argsName}, {resultName}>)_i{i}).InvokeAfter(arguments, r);");
+                sb.AppendLine($"            if (completedCount > {idx})");
+                sb.AppendLine("            {");
+                sb.AppendLine("                try {");
+                sb.AppendLine($"                    r = _i{idx} is IAsyncProcedureInterceptor<{argsName}, {resultName}> ai{idx}");
+                sb.AppendLine($"                        ? await ai{idx}.InvokeAfterExecutionAsync(arguments, r, ct)");
+                sb.AppendLine($"                        : ((IProcedureInterceptor<{argsName}, {resultName}>)_i{idx}).InvokeAfter(arguments, r);");
+                sb.AppendLine("                } catch (Exception ex) { return ex!; }");
+                sb.AppendLine("            }");
             }
-            sb.AppendLine("                } catch (Exception ex) { return ex!; }");
-            sb.AppendLine("            }");
             sb.AppendLine("            return r;");
             sb.AppendLine("        }");
             sb.AppendLine();
             sb.AppendLine($"        private async ValueTask<OneOf<{resultName}, Exception>> RunAfterAsync({argsName} arguments, int completedCount, OneOf<{resultName}, Exception> resultOrException, CancellationToken ct)");
             sb.AppendLine("        {");
             sb.AppendLine("            var r = resultOrException;");
-            sb.AppendLine("            for (var i = completedCount - 1; i >= 0; i--)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                try {");
-            for (var i = 0; i < interceptorTypes.Count; i++)
+            for (var idx = interceptorTypes.Count - 1; idx >= 0; idx--)
             {
-                sb.AppendLine($"                    if (i == {i}) r = _i{i} is IAsyncProcedureInterceptor<{argsName}, {resultName}> ai{i}");
-                sb.AppendLine($"                        ? await ai{i}.InvokeAfterExecutionAsync(arguments, r, ct)");
-                sb.AppendLine($"                        : ((IProcedureInterceptor<{argsName}, {resultName}>)_i{i}).InvokeAfter(arguments, r);");
+                sb.AppendLine($"            if (completedCount > {idx})");
+                sb.AppendLine("            {");
+                sb.AppendLine("                try {");
+                sb.AppendLine($"                    r = _i{idx} is IAsyncProcedureInterceptor<{argsName}, {resultName}> ai{idx}");
+                sb.AppendLine($"                        ? await ai{idx}.InvokeAfterExecutionAsync(arguments, r, ct)");
+                sb.AppendLine($"                        : ((IProcedureInterceptor<{argsName}, {resultName}>)_i{idx}).InvokeAfter(arguments, r);");
+                sb.AppendLine("                } catch (Exception ex) { return ex!; }");
+                sb.AppendLine("            }");
             }
-            sb.AppendLine("                } catch (Exception ex) { return ex!; }");
-            sb.AppendLine("            }");
             sb.AppendLine("            return r;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");

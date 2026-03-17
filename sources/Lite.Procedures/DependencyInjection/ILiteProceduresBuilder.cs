@@ -16,5 +16,10 @@ namespace Lite.Procedures.DependencyInjection
         ILiteProceduresBuilder AddGlobalInterceptor<TInterceptor>() where TInterceptor : IProcedureInterceptorCore;
         
         ILiteProceduresBuilder AddGlobalInterceptors(params Assembly[] assemblies);
+
+        /// <summary>
+        /// Registers all configured procedures and their pipelines in the service collection. Call once after configuration.
+        /// </summary>
+        void Build();
     }
 }

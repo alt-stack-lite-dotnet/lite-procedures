@@ -1,0 +1,12 @@
+{
+  "editor.formatOnSave": true,
+  "[csharp]": {
+    "editor.defaultFormatter": "csharpier.csharpier-vscode",
+    "editor.formatOnSave": true
+  },
+  "omnisharp.enableEditorConfigSupport": true,
+  "files.exclude": {
+    "**/bin": false,
+    "**/obj": false
+  }
+}
