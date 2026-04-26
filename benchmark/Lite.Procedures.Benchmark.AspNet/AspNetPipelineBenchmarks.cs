@@ -5,9 +5,8 @@ using BenchmarkDotNet.Jobs;
 using Lite.Procedures;
 using Lite.Procedures.DependencyInjection;
 using Lite.Procedures.Interceptors;
+using Lite.Procedures.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
-using OneOf;
-using OneOf.Types;
 
 namespace Lite.Procedures.Benchmark.AspNet;
 
@@ -16,7 +15,7 @@ namespace Lite.Procedures.Benchmark.AspNet;
 public class AspNetPipelineBenchmarks
 {
     private IServiceProvider _rootServices = null!;
-    private IAsyncProcedure<string, string> _cachedPipeline = null!;
+    private IAsyncProcedurePipeline<string, string> _cachedPipeline = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -24,21 +23,28 @@ public class AspNetPipelineBenchmarks
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddLiteProcedures(b =>
         {
-            b.AddGlobalInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
+            b.AddDefaultInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
             b.Build();
         });
         var app = builder.Build();
-        app.MapGet("/echo", async (string? q, IAsyncProcedure<string, string> pipeline, CancellationToken ct) =>
+        app.MapGet("/echo", async (string? q, IAsyncProcedurePipeline<string, string> pipeline, CancellationToken ct) =>
         {
-            OneOf<string, Exception> result = await pipeline.InvokeAsync(q ?? "", ct);
-            return result.IsT0 ? Results.Ok(result.AsT0) : Results.BadRequest();
+            try
+            {
+                var result = await pipeline.InvokeAsync(q ?? "", ct);
+                return Results.Ok(result);
+            }
+            catch
+            {
+                return Results.BadRequest();
+            }
         });
         const string url = "http://127.0.0.1:56789";
         app.Urls.Add(url);
         app.Start();
 
         _rootServices = app.Services;
-        _cachedPipeline = _rootServices.GetRequiredService<IAsyncProcedure<string, string>>();
+        _cachedPipeline = _rootServices.GetRequiredService<IAsyncProcedurePipeline<string, string>>();
         _httpClient = new HttpClient { BaseAddress = new Uri(url) };
         _app = app;
     }
@@ -50,16 +56,14 @@ public class AspNetPipelineBenchmarks
     public void Cleanup() => _app?.StopAsync().GetAwaiter().GetResult();
 
     [Benchmark(Baseline = true)]
-    public async ValueTask<OneOf<string, Exception>> DirectPipelineInvoke()
-    {
-        return await _cachedPipeline.InvokeAsync("hello", CancellationToken.None);
-    }
+    public ValueTask<string> DirectPipelineInvoke()
+        => _cachedPipeline.InvokeAsync("hello", CancellationToken.None);
 
     [Benchmark]
-    public async ValueTask<OneOf<string, Exception>> ResolveFromScope_AndInvoke()
+    public async ValueTask<string> ResolveFromScope_AndInvoke()
     {
         await using var scope = _rootServices.CreateAsyncScope();
-        var pipeline = scope.ServiceProvider.GetRequiredService<IAsyncProcedure<string, string>>();
+        var pipeline = scope.ServiceProvider.GetRequiredService<IAsyncProcedurePipeline<string, string>>();
         return await pipeline.InvokeAsync("hello", CancellationToken.None);
     }
 
@@ -88,9 +92,9 @@ internal sealed class EchoProcedure : IAsyncProcedure<string, string>
 
 internal sealed class NoOpAspNetInterceptor : IAsyncProcedureInterceptor<string, string>
 {
-    public ValueTask<OneOf<Success, string, Exception>> InvokeBeforeExecutionAsync(string arguments, CancellationToken cancellationToken)
-        => ValueTask.FromResult<OneOf<Success, string, Exception>>(new Success());
-
-    public ValueTask<OneOf<string, Exception>> InvokeAfterExecutionAsync(string arguments, OneOf<string, Exception> resultOrError, CancellationToken cancellationToken)
-        => ValueTask.FromResult(resultOrError);
+    public ValueTask<string> InvokeAsync(
+        string arguments,
+        Func<string, CancellationToken, ValueTask<string>> next,
+        CancellationToken cancellationToken)
+        => next(arguments, cancellationToken);
 }

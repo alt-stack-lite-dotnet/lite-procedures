@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using Lite.Procedures.Interceptors;
 
-
-namespace Lite.Procedures.DependencyInjection
+namespace Lite.Procedures.Builders
 {
     internal sealed class LiteProceduresPipelineBuilder<TProcedure>
         : ILiteProceduresPipelineBuilder<TProcedure>

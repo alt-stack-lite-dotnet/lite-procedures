@@ -15,6 +15,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\sources\Lite.Procedures\Lite.Procedures.csproj" />
+      <ProjectReference Include="..\..\sources\Lite.Procedures.DependencyInjection\Lite.Procedures.DependencyInjection.csproj" />
       <ProjectReference Include="..\..\sources\Lite.Procedures.SourceGenerators\Lite.Procedures.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 

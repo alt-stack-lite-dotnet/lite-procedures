@@ -1,18 +1,15 @@
-using System.Reflection;
 using BenchmarkDotNet.Attributes;
-using Lite.Procedures.Generated;
 using Lite.Procedures.Interceptors;
 using Lite.Procedures.Pipeline;
 using MessagePipe;
 using Microsoft.Extensions.DependencyInjection;
-using OneOf;
-using OneOf.Types;
 
 namespace Lite.Procedures.Benchmark;
 
 // ================================================================
 // Сравнение с реальным MessagePipe (NuGet): request/handler + 0 или 3 фильтра.
-// Аналогично KillerComparisonBenchmarks для MediatR.
+// Цель — равная производительность с MessagePipe (один из самых быстрых
+// pub/sub фреймворков для .NET).
 // ================================================================
 
 public readonly struct MpEchoRequest
@@ -21,32 +18,32 @@ public readonly struct MpEchoRequest
     public string Value { get; }
 }
 
-[Config(typeof(KillerConfig))]
+[Config(typeof(ComparisonConfig))]
 [MemoryDiagnoser]
 [MinColumn, MaxColumn, BaselineColumn]
 public class MessagePipeComparisonBenchmarks
 {
-    private IAsyncProcedurePipeline<string, string> _liteNo = null!;
-    private IAsyncProcedurePipeline<string, string> _liteThree = null!;
+    private static readonly EchoRequest LiteInput = new("input");
+
+    private IAsyncProcedurePipeline<EchoRequest, EchoResponse> _liteNo = null!;
+    private IAsyncProcedurePipeline<EchoRequest, EchoResponse> _liteThree = null!;
     private IAsyncRequestHandler<MpEchoRequest, string> _messagePipeNo = null!;
     private IAsyncRequestHandler<MpEchoRequest, string> _messagePipeThree = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        var procedure = new NoOpAsyncProcedure();
-        _liteNo = new AsyncProcedurePipeline<string, string>(procedure, Array.Empty<IProcedureInterceptorCore>());
+        var procedure = new EchoAsyncProcedure();
 
-        // Lite_ThreeInterceptors: сгенерированный пайплайн (codegen), чтобы честно бить MessagePipe.
-        var registry = GeneratedPipelineRegistryDiscovery.TryDiscover();
-        var procThree = new ProcedureWithThreeInterceptors();
-        var interceptor = new NoOpAsyncInterceptor();
-        var interceptorTypesThree = new[] { typeof(NoOpAsyncInterceptor), typeof(NoOpAsyncInterceptor), typeof(NoOpAsyncInterceptor) };
-        var generatedTypeThree = registry?.GetGeneratedPipelineType(typeof(ProcedureWithThreeInterceptors), interceptorTypesThree);
-        if (generatedTypeThree != null)
-            _liteThree = (IAsyncProcedurePipeline<string, string>)Activator.CreateInstance(generatedTypeThree, procThree, interceptor, interceptor, interceptor)!;
-        else
-            _liteThree = new AsyncProcedurePipeline<string, string>(procThree, new IProcedureInterceptorCore[] { interceptor, interceptor, interceptor });
+        _liteNo = new AsyncProcedurePipeline<EchoRequest, EchoResponse>(
+            procedure,
+            []);
+
+        _liteThree = new AsyncProcedurePipeline<EchoRequest, EchoResponse>(
+            procedure,
+            [
+                new NoOpAsyncInterceptor(), new NoOpAsyncInterceptor(), new NoOpAsyncInterceptor()
+            ]);
 
         var servicesNo = new ServiceCollection();
         servicesNo.AddMessagePipe();
@@ -65,12 +62,12 @@ public class MessagePipeComparisonBenchmarks
     }
 
     [Benchmark(Baseline = true)]
-    public ValueTask<OneOf<string, Exception>> Lite_NoInterceptors()
-        => _liteNo.InvokeAsync("input", CancellationToken.None);
+    public ValueTask<EchoResponse> Lite_NoInterceptors()
+        => _liteNo.InvokeAsync(LiteInput, CancellationToken.None);
 
     [Benchmark]
-    public ValueTask<OneOf<string, Exception>> Lite_ThreeInterceptors()
-        => _liteThree.InvokeAsync("input", CancellationToken.None);
+    public ValueTask<EchoResponse> Lite_ThreeInterceptors()
+        => _liteThree.InvokeAsync(LiteInput, CancellationToken.None);
 
     [Benchmark]
     public ValueTask<string> MessagePipe_NoFilters()

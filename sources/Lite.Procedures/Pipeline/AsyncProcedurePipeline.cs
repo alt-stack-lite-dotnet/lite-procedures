@@ -1,124 +1,33 @@
 using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Lite.Procedures.Interceptors;
-using OneOf;
-using OneOf.Types;
-
 
 namespace Lite.Procedures.Pipeline
 {
     public sealed class AsyncProcedurePipeline<TArguments, TResult> : IAsyncProcedurePipeline<TArguments, TResult>
     {
-        private readonly IAsyncProcedure<TArguments, TResult> _procedure;
-        private readonly IProcedureInterceptorCore[] _interceptors;
+        private readonly Func<TArguments, CancellationToken, ValueTask<TResult>> _entry;
 
         public AsyncProcedurePipeline(
             IAsyncProcedure<TArguments, TResult> procedure,
-            IProcedureInterceptorCore[] interceptors)
+            IAsyncProcedureInterceptor<TArguments, TResult>[] interceptors)
         {
-            _procedure = procedure;
-            _interceptors = interceptors;
-        }
+            Func<TArguments, CancellationToken, ValueTask<TResult>> next = procedure.InvokeAsync;
 
-
-        public async ValueTask<OneOf<TResult, Exception>> InvokeAsync(
-            TArguments arguments,
-            CancellationToken cancellationToken)
-        {
-            var (completedCount, beforeChainInvocationResult) = await RunBeforeAsync(arguments, cancellationToken);
-
-            if (!beforeChainInvocationResult.TryPickT0(out _, out var resultOrException))
+            for (var i = interceptors.Length - 1; i >= 0; i--)
             {
-                return await RunAfterAsync(arguments, completedCount, resultOrException, cancellationToken);
+                var interceptor = interceptors[i];
+                var capturedNext = next;
+                next = (args, ct) => interceptor.InvokeAsync(args, capturedNext, ct);
             }
 
-            resultOrException = await InvokeProcedureAsync(arguments, cancellationToken);
-
-            return await RunAfterAsync(arguments, completedCount, resultOrException, cancellationToken);
+            _entry = next;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private async ValueTask<OneOf<TResult, Exception>> InvokeProcedureAsync(TArguments arguments,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await _procedure.InvokeAsync(arguments, cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                return exception;
-            }
-        }
-
-        private async ValueTask<(int completedCount, OneOf<Success, TResult, Exception>)> RunBeforeAsync(
-            TArguments arguments,
-            CancellationToken cancellationToken)
-        {
-            var completedCount = 0;
-
-            foreach (var interceptor in _interceptors)
-            {
-                var beforeInvocationResult = interceptor switch
-                {
-                    IAsyncProcedureInterceptor<TArguments, TResult> asyncInterceptor =>
-                        await asyncInterceptor.InvokeBeforeExecutionAsync(arguments, cancellationToken),
-
-                    IProcedureInterceptor<TArguments, TResult> syncInterceptor => syncInterceptor.InvokeBefore(
-                        arguments),
-
-                    _ => throw new InvalidOperationException(
-                        $"Interceptor {interceptor.GetType()} does not implement a known interceptor interface for <{typeof(TArguments).Name}, {typeof(TResult).Name}>.")
-                };
-
-                completedCount++;
-
-                if (beforeInvocationResult.IsT0)
-                {
-                    continue;
-                }
-
-                return (completedCount, beforeInvocationResult);
-            }
-
-            return (completedCount, new Success());
-        }
-
-        private async ValueTask<OneOf<TResult, Exception>> RunAfterAsync(
-            TArguments arguments,
-            int completedCount,
-            OneOf<TResult, Exception> resultOrError,
-            CancellationToken cancellationToken)
-        {
-            var afterInvocationResult = resultOrError;
-
-            for (var i = completedCount - 1; i >= 0; i--)
-            {
-                try
-                {
-                    afterInvocationResult = _interceptors[i] switch
-                    {
-                        IAsyncProcedureInterceptor<TArguments, TResult> asyncInterceptor =>
-                            await asyncInterceptor.InvokeAfterExecutionAsync(arguments, afterInvocationResult,
-                                cancellationToken),
-
-                        IProcedureInterceptor<TArguments, TResult> syncInterceptor =>
-                            syncInterceptor.InvokeAfter(arguments, afterInvocationResult),
-
-                        _ => throw new InvalidOperationException(
-                            $"Interceptor {_interceptors[i].GetType()} does not implement a known interceptor interface for <{typeof(TArguments).Name}, {typeof(TResult).Name}>.")
-                    };
-                }
-                catch (Exception exception)
-                {
-                    return exception;
-                }
-            }
-
-            return afterInvocationResult;
-        }
+        public ValueTask<TResult> InvokeAsync(TArguments arguments, CancellationToken cancellationToken)
+            => _entry(arguments, cancellationToken);
     }
 }
