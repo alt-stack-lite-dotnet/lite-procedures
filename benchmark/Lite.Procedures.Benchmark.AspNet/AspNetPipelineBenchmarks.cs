@@ -4,10 +4,9 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using Lite.Procedures;
 using Lite.Procedures.DependencyInjection;
-using Lite.Procedures.Interceptors;
+using Lite.Procedures.Pipeline;
+using Lite.Procedures.Pipeline.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
-using OneOf;
-using OneOf.Types;
 
 namespace Lite.Procedures.Benchmark.AspNet;
 
@@ -24,14 +23,20 @@ public class AspNetPipelineBenchmarks
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddLiteProcedures(b =>
         {
-            b.AddGlobalInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
-            b.Build();
+            b.UseInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
         });
         var app = builder.Build();
         app.MapGet("/echo", async (string? q, IAsyncProcedure<string, string> pipeline, CancellationToken ct) =>
         {
-            OneOf<string, Exception> result = await pipeline.InvokeAsync(q ?? "", ct);
-            return result.IsT0 ? Results.Ok(result.AsT0) : Results.BadRequest();
+            try
+            {
+                var result = await pipeline.ExecuteAsync(q ?? "", ct);
+                return Results.Ok(result);
+            }
+            catch
+            {
+                return Results.BadRequest();
+            }
         });
         const string url = "http://127.0.0.1:56789";
         app.Urls.Add(url);
@@ -50,17 +55,15 @@ public class AspNetPipelineBenchmarks
     public void Cleanup() => _app?.StopAsync().GetAwaiter().GetResult();
 
     [Benchmark(Baseline = true)]
-    public async ValueTask<OneOf<string, Exception>> DirectPipelineInvoke()
-    {
-        return await _cachedPipeline.InvokeAsync("hello", CancellationToken.None);
-    }
+    public ValueTask<string> DirectPipelineInvoke()
+        => _cachedPipeline.ExecuteAsync("hello", CancellationToken.None);
 
     [Benchmark]
-    public async ValueTask<OneOf<string, Exception>> ResolveFromScope_AndInvoke()
+    public async ValueTask<string> ResolveFromScope_AndInvoke()
     {
         await using var scope = _rootServices.CreateAsyncScope();
         var pipeline = scope.ServiceProvider.GetRequiredService<IAsyncProcedure<string, string>>();
-        return await pipeline.InvokeAsync("hello", CancellationToken.None);
+        return await pipeline.ExecuteAsync("hello", CancellationToken.None);
     }
 
     [Benchmark]
@@ -82,15 +85,15 @@ public class AspNetPipelineBenchmarks
 
 internal sealed class EchoProcedure : IAsyncProcedure<string, string>
 {
-    public ValueTask<string> InvokeAsync(string arguments, CancellationToken cancellationToken)
+    public ValueTask<string> ExecuteAsync(string arguments, CancellationToken cancellationToken)
         => ValueTask.FromResult(arguments);
 }
 
-internal sealed class NoOpAspNetInterceptor : IAsyncProcedureInterceptor<string, string>
+internal sealed class NoOpAspNetInterceptor : AsyncInterceptor<string, string>
 {
-    public ValueTask<OneOf<Success, string, Exception>> InvokeBeforeExecutionAsync(string arguments, CancellationToken cancellationToken)
-        => ValueTask.FromResult<OneOf<Success, string, Exception>>(new Success());
-
-    public ValueTask<OneOf<string, Exception>> InvokeAfterExecutionAsync(string arguments, OneOf<string, Exception> resultOrError, CancellationToken cancellationToken)
-        => ValueTask.FromResult(resultOrError);
+    public override ValueTask<string> InvokeAsync(
+        string arguments,
+        Func<string, CancellationToken, ValueTask<string>> next,
+        CancellationToken cancellationToken)
+        => next(arguments, cancellationToken);
 }

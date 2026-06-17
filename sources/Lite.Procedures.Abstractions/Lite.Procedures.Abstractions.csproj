@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Lite.Procedures</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <Description>Core abstractions for Lite.Procedures: procedure and interceptor contracts.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Folder Include="Pipeline\" />
+    </ItemGroup>
+
+</Project>

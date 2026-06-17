@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Lite.Procedures</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <Description>Convenience attributes and helpers for Lite.Procedures on modern .NET (generic [InterceptWith&lt;T&gt;], RPC attributes).</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Lite.Procedures.Abstractions\Lite.Procedures.Abstractions.csproj" />
+    </ItemGroup>
+
+</Project>

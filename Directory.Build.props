@@ -1,0 +1,33 @@
+<Project>
+
+  <!-- Shared metadata for all projects. NuGet packaging is opt-IN: nothing is packed unless a
+       project sets <IsPackable>true</IsPackable> (so benchmarks/tests/stubs never reach NuGet). -->
+  <PropertyGroup>
+    <Authors>Serafim Prozorov</Authors>
+    <Company>alt-stack-lite-dotnet</Company>
+    <Product>Lite.Procedures</Product>
+    <Copyright>Copyright (c) 2026 Serafim Prozorov</Copyright>
+
+    <!-- Default version for local `dotnet pack`. CI overrides via -p:Version from the git tag. -->
+    <Version>1.0.0-rc1</Version>
+
+    <PackageProjectUrl>https://github.com/alt-stack-lite-dotnet/lite-procedures</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/alt-stack-lite-dotnet/lite-procedures.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>mediator;pipeline;interceptors;cqrs;source-generator;aot;dependency-injection</PackageTags>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Bundle the README into every package that opts in to packing. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

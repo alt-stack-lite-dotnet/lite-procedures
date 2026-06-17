@@ -1,6 +1,10 @@
 bin/
 obj/
 /packages/
+# NuGet pack output (local + CI use `-o out`)
+out/
+*.nupkg
+*.snupkg
 riderModule.iml
 /_ReSharper.Caches/
 .idea/
