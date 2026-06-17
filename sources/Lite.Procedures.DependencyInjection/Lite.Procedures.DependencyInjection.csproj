@@ -3,6 +3,8 @@
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
         <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <Description>Microsoft.Extensions.DependencyInjection integration for Lite.Procedures.</Description>
     </PropertyGroup>
 
     <ItemGroup>
@@ -10,7 +12,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Lite.Procedures\Lite.Procedures.csproj" />
+      <ProjectReference Include="..\Lite.Procedures.Configuration\Lite.Procedures.Configuration.csproj" />
+      <ProjectReference Include="..\Lite.Procedures.Pipeline\Lite.Procedures.Pipeline.csproj" />
     </ItemGroup>
 
 </Project>

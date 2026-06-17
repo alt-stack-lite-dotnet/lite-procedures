@@ -14,9 +14,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\sources\Lite.Procedures\Lite.Procedures.csproj" />
+      <ProjectReference Include="..\..\sources\Lite.Procedures.Pipeline\Lite.Procedures.Pipeline.csproj" />
+      <ProjectReference Include="..\..\sources\Lite.Procedures.Synchronous\Lite.Procedures.Synchronous.csproj" />
       <ProjectReference Include="..\..\sources\Lite.Procedures.DependencyInjection\Lite.Procedures.DependencyInjection.csproj" />
-      <ProjectReference Include="..\..\sources\Lite.Procedures.SourceGenerators\Lite.Procedures.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+      <ProjectReference Include="..\..\sources\Lite.Procedures.Pipeline.SourceGenerators\Lite.Procedures.Pipeline.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
 </Project>

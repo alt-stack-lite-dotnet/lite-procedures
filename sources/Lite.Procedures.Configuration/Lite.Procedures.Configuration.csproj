@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <Description>Builder and configuration model for Lite.Procedures pipelines (DI-agnostic).</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Lite.Procedures.DependencyInjection" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Lite.Procedures.Abstractions\Lite.Procedures.Abstractions.csproj" />
+    </ItemGroup>
+
+</Project>

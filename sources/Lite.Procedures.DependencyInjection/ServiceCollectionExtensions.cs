@@ -1,6 +1,7 @@
 using System;
-using Lite.Procedures.Builders;
-using Lite.Procedures.Pipeline;
+using System.Linq;
+using Lite.Procedures.Configuration;
+using Lite.Procedures.Pipeline.Assembling;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -19,27 +20,49 @@ namespace Lite.Procedures.DependencyInjection
             configure(builder);
             var configuration = builder.Build();
 
-            foreach (var entry in configuration.DefaultInterceptors)
-                services.TryAddSingleton(entry.Type);
-
-            foreach (var preset in configuration.Presets.Values)
-                foreach (var entry in preset.Entries)
-                    services.TryAddSingleton(entry.Type);
-
             var assembler = new PipelineAssembler();
+
             foreach (var procedure in configuration.Procedures)
             {
                 services.TryAddSingleton(procedure.ProcedureType);
+                foreach (var ir in procedure.Interceptors)
+                {
+                    if (ir.Instance is { } instance)
+                        services.TryAddSingleton(ir.InterceptorType, _ => instance);
+                    else
+                        services.TryAddSingleton(ir.InterceptorType);
+                }
 
-                foreach (var interceptorType in procedure.InterceptorTypes)
-                    services.TryAddSingleton(interceptorType);
+                if (PipelineFactoryRegistry.TryGet(procedure.ProcedureType, out var factory))
+                {
+                    services.AddSingleton(
+                        factory.ProcedureInterfaceType,
+                        sp => factory.Assemble(sp, procedure.Interceptors
+                            .Select(ir => (ir.InterceptorType, ir.Priority))
+                            .ToArray()));
+                    continue;
+                }
 
+                if (configuration.RequireGeneratedFactories)
+                {
+                    throw new InvalidOperationException(
+                        $"Procedure '{procedure.ProcedureType.FullName}' has no source-generated factory, " +
+                        $"but RequireGeneratedFactories() is enabled. Ensure the source generator covers this " +
+                        $"procedure (mark its assembly with the generator) or remove the AoT-strict requirement.");
+                }
+
+                var procedureInterfaceType = PipelineAssemblerBridge.ResolveProcedureInterface(procedure.ProcedureType);
                 var procedureType = procedure.ProcedureType;
-                var interceptorTypes = procedure.InterceptorTypes;
-                var pipelineInterface = PipelineAssembler.ResolvePipelineInterface(procedureType);
+                var interceptorTuples = procedure.Interceptors
+                    .Select(ir => (ir.InterceptorType, ir.Priority))
+                    .ToArray();
 
-                services.AddSingleton(pipelineInterface,
-                    sp => assembler.Assemble(procedureType, interceptorTypes, sp));
+                services.AddSingleton(procedureInterfaceType, sp =>
+                    PipelineAssemblerBridge.Assemble(
+                        assembler,
+                        procedureType,
+                        interceptorTuples,
+                        sp.GetRequiredService));
             }
 
             return services;

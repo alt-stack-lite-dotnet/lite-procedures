@@ -4,8 +4,8 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using Lite.Procedures;
 using Lite.Procedures.DependencyInjection;
-using Lite.Procedures.Interceptors;
 using Lite.Procedures.Pipeline;
+using Lite.Procedures.Pipeline.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Lite.Procedures.Benchmark.AspNet;
@@ -15,7 +15,7 @@ namespace Lite.Procedures.Benchmark.AspNet;
 public class AspNetPipelineBenchmarks
 {
     private IServiceProvider _rootServices = null!;
-    private IAsyncProcedurePipeline<string, string> _cachedPipeline = null!;
+    private IAsyncProcedure<string, string> _cachedPipeline = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -23,15 +23,14 @@ public class AspNetPipelineBenchmarks
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddLiteProcedures(b =>
         {
-            b.AddDefaultInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
-            b.Build();
+            b.UseInterceptor<NoOpAspNetInterceptor>().AddProcedure<EchoProcedure>();
         });
         var app = builder.Build();
-        app.MapGet("/echo", async (string? q, IAsyncProcedurePipeline<string, string> pipeline, CancellationToken ct) =>
+        app.MapGet("/echo", async (string? q, IAsyncProcedure<string, string> pipeline, CancellationToken ct) =>
         {
             try
             {
-                var result = await pipeline.InvokeAsync(q ?? "", ct);
+                var result = await pipeline.ExecuteAsync(q ?? "", ct);
                 return Results.Ok(result);
             }
             catch
@@ -44,7 +43,7 @@ public class AspNetPipelineBenchmarks
         app.Start();
 
         _rootServices = app.Services;
-        _cachedPipeline = _rootServices.GetRequiredService<IAsyncProcedurePipeline<string, string>>();
+        _cachedPipeline = _rootServices.GetRequiredService<IAsyncProcedure<string, string>>();
         _httpClient = new HttpClient { BaseAddress = new Uri(url) };
         _app = app;
     }
@@ -57,14 +56,14 @@ public class AspNetPipelineBenchmarks
 
     [Benchmark(Baseline = true)]
     public ValueTask<string> DirectPipelineInvoke()
-        => _cachedPipeline.InvokeAsync("hello", CancellationToken.None);
+        => _cachedPipeline.ExecuteAsync("hello", CancellationToken.None);
 
     [Benchmark]
     public async ValueTask<string> ResolveFromScope_AndInvoke()
     {
         await using var scope = _rootServices.CreateAsyncScope();
-        var pipeline = scope.ServiceProvider.GetRequiredService<IAsyncProcedurePipeline<string, string>>();
-        return await pipeline.InvokeAsync("hello", CancellationToken.None);
+        var pipeline = scope.ServiceProvider.GetRequiredService<IAsyncProcedure<string, string>>();
+        return await pipeline.ExecuteAsync("hello", CancellationToken.None);
     }
 
     [Benchmark]
@@ -86,13 +85,13 @@ public class AspNetPipelineBenchmarks
 
 internal sealed class EchoProcedure : IAsyncProcedure<string, string>
 {
-    public ValueTask<string> InvokeAsync(string arguments, CancellationToken cancellationToken)
+    public ValueTask<string> ExecuteAsync(string arguments, CancellationToken cancellationToken)
         => ValueTask.FromResult(arguments);
 }
 
-internal sealed class NoOpAspNetInterceptor : IAsyncProcedureInterceptor<string, string>
+internal sealed class NoOpAspNetInterceptor : AsyncInterceptor<string, string>
 {
-    public ValueTask<string> InvokeAsync(
+    public override ValueTask<string> InvokeAsync(
         string arguments,
         Func<string, CancellationToken, ValueTask<string>> next,
         CancellationToken cancellationToken)
