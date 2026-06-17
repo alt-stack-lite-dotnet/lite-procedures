@@ -17,3 +17,6 @@ BenchmarkDotNet.Artifacts/
 *.log
 **/*-report.html
 **/*-report.csv
+
+# Local assistant instructions — not part of the project's documentation
+CLAUDE.md

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Lite.Procedures.Rpc</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <Description>RPC publication metadata for Lite.Procedures: [Rpc] attribute + fluent description; source-generated provider feeding gRPC routes/proto.</Description>
+    </PropertyGroup>
+
+</Project>

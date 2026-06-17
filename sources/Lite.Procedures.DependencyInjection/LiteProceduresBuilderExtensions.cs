@@ -1,5 +1,6 @@
 using System;
 using Lite.Procedures.Configuration;
+using Lite.Procedures.Pipeline;
 
 namespace Lite.Procedures.DependencyInjection
 {

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Lite.Procedures.Pipeline.Interceptors;
+using Lite.Procedures.Pipeline.Interception;
 
 namespace Lite.Procedures.Pipeline.Assembling
 {

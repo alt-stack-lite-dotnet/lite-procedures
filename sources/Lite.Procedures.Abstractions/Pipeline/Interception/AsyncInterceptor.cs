@@ -1,9 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Lite.Procedures.Pipeline.Interception;
 
-namespace Lite.Procedures.Pipeline.Interceptors
+namespace Lite.Procedures.Pipeline.Interception
 {
     public abstract class AsyncInterceptor<TArguments, TResult> : IInterceptorCore
     {

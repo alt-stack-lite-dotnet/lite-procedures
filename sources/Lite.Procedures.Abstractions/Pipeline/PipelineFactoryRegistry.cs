@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Lite.Procedures
+namespace Lite.Procedures.Pipeline
 {
     /// <summary>
     /// Process-wide registry of typed pipeline factories emitted by source generators. Generators

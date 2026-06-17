@@ -4,16 +4,13 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Toolchains.InProcess.Emit;
-using Lite.Procedures;
-using Lite.Procedures.Configuration;
 using Lite.Procedures.DependencyInjection;
 using Lite.Procedures.Pipeline.Interception;
-using Lite.Procedures.Pipeline.Interceptors;
 using MediatR;
 using MessagePipe;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Lite.Procedures.Benchmark.Competitors;
+namespace Lite.Procedures.Benchmark;
 
 // ============================================================================
 // HONEST head-to-head: Lite.Procedures vs MediatR vs MessagePipe.

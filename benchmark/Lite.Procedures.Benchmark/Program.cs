@@ -1,5 +1,5 @@
 using BenchmarkDotNet.Running;
-using Lite.Procedures.Benchmark.Competitors;
+using Lite.Procedures.Benchmark;
 
 // Lite.Procedures vs MediatR vs MessagePipe. One thesis per class.
 //   DispatchBenchmarks   - raw dispatch, 0 middleware

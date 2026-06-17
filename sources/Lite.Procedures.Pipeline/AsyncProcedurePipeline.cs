@@ -2,7 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Lite.Procedures.Pipeline.Interceptors;
+using Lite.Procedures.Pipeline.Interception;
 
 namespace Lite.Procedures.Pipeline
 {

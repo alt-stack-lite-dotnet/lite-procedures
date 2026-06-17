@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Lite.Procedures
+namespace Lite.Procedures.Pipeline
 {
     /// <summary>
     /// Source-generator-emitted typed factory that builds a closed-generic pipeline for a

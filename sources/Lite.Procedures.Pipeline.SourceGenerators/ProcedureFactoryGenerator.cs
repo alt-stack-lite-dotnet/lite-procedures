@@ -268,11 +268,11 @@ namespace Lite.Procedures.Pipeline.SourceGenerators
                 : $"global::Lite.Procedures.IProcedure<{argsFqn}, {resultFqn}>";
 
             var interceptorBaseType = p.IsAsync
-                ? $"global::Lite.Procedures.Pipeline.Interceptors.AsyncInterceptor<{argsFqn}, {resultFqn}>"
-                : $"global::Lite.Procedures.Pipeline.Interceptors.Interceptor<{argsFqn}, {resultFqn}>";
+                ? $"global::Lite.Procedures.Pipeline.Interception.AsyncInterceptor<{argsFqn}, {resultFqn}>"
+                : $"global::Lite.Procedures.Pipeline.Interception.Interceptor<{argsFqn}, {resultFqn}>";
 
             sb.Append("    internal sealed class ").Append(factoryName)
-              .AppendLine(" : global::Lite.Procedures.IProcedurePipelineFactory");
+              .AppendLine(" : global::Lite.Procedures.Pipeline.IProcedurePipelineFactory");
             sb.AppendLine("    {");
             sb.AppendLine($"        public global::System.Type ProcedureType => typeof({procFqn});");
             sb.AppendLine($"        public global::System.Type ProcedureInterfaceType => typeof({procedureInterfaceType});");
@@ -344,7 +344,7 @@ namespace Lite.Procedures.Pipeline.SourceGenerators
             foreach (var p in procedures)
             {
                 var className = "Factory_" + EscapeIdentifier(p.Procedure.ToDisplayString());
-                sb.AppendLine($"            global::Lite.Procedures.PipelineFactoryRegistry.Register(new {className}());");
+                sb.AppendLine($"            global::Lite.Procedures.Pipeline.PipelineFactoryRegistry.Register(new {className}());");
             }
             sb.AppendLine("        }");
             sb.AppendLine("    }");

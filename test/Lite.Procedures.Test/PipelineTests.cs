@@ -1,6 +1,6 @@
 using Lite.Procedures;
 using Lite.Procedures.Pipeline;
-using Lite.Procedures.Pipeline.Interceptors;
+using Lite.Procedures.Pipeline.Interception;
 
 namespace Lite.Procedures.Test;
 

@@ -1,7 +1,6 @@
 using System;
-using Lite.Procedures.Pipeline.Interception;
 
-namespace Lite.Procedures.Pipeline.Interceptors
+namespace Lite.Procedures.Pipeline.Interception
 {
     public abstract class Interceptor<TArguments, TResult> : IInterceptorCore
     {

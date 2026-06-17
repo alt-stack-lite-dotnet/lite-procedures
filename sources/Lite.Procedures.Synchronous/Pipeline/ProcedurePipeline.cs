@@ -1,6 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
-using Lite.Procedures.Pipeline.Interceptors;
+using Lite.Procedures.Pipeline.Interception;
 
 namespace Lite.Procedures.Pipeline
 {

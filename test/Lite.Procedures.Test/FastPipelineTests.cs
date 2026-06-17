@@ -2,7 +2,6 @@ using Lite.Procedures;
 using Lite.Procedures.Configuration;
 using Lite.Procedures.DependencyInjection;
 using Lite.Procedures.Pipeline.Interception;
-using Lite.Procedures.Pipeline.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Lite.Procedures.Test;
