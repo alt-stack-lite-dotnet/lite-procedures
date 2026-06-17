@@ -22,13 +22,26 @@
      - версия пакетов берётся из имени тега (например, `v1.0.0` → `1.0.0`);
      - выполняется `dotnet pack`;
      - артефакты загружаются в workflow;
-     - при наличии секрета **`NUGET_API_KEY`** в репозитории пакеты отправляются на NuGet.
+     - через **Trusted Publishing (OIDC)** пакеты отправляются на NuGet (без долгоживущего API-ключа).
 
-## Секрет NUGET_API_KEY
+## Trusted Publishing (OIDC)
 
-- В настройках репозитория: Settings → Secrets and variables → Actions.
-- Добавить секрет `NUGET_API_KEY` с API-ключом с [nuget.org](https://www.nuget.org/account/apikeys).
-- Если секрет не задан, шаг «Push to NuGet» пропускается (артефакты всё равно сохраняются).
+Публикация в NuGet идёт через [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) — без долгоживущего API-ключа. GitHub Actions получает короткоживущий OIDC-токен и обменивает его на временный ключ nuget.org (живёт 1 час).
+
+Настройка (один раз):
+
+1. На [nuget.org](https://www.nuget.org) → имя пользователя → **Trusted Publishing** → создать политику:
+   - **Repository Owner:** `alt-stack-lite-dotnet`
+   - **Repository:** `lite-procedures`
+   - **Workflow File:** `ci.yml` (только имя файла, без пути)
+   - **Environment:** оставить пустым (GitHub environments не используются)
+   - **Policy owner:** организация `alt-stack-lite-dotnet` (или личный аккаунт)
+2. В репозитории добавить секрет **`NUGET_USER`** (Settings → Secrets and variables → Actions) = **profile name** на nuget.org (НЕ email).
+3. В workflow `pack` уже задано `permissions: id-token: write`, шаг `NuGet/login@v1` получает временный ключ, `dotnet nuget push` публикует.
+
+Примечания:
+- Для приватного репозитория политика стартует как «temporary active 7 дней»: если за это время не было успешной публикации — деактивируется (окно можно перезапустить). После первой успешной публикации становится постоянной.
+- Если секрет `NUGET_USER` или политика не настроены, шаг login упадёт — артефакты `out/*.nupkg` всё равно загружаются в workflow.
 
 ## Смена релизной ветки
 
