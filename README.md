@@ -2,6 +2,41 @@
 
 Легковесный пайплайн процедур с интерцепторами для .NET: регистрация в DI, синхронный/асинхронный вызов, опциональная кодогенерация пайплайнов.
 
+## Быстрый старт
+
+```bash
+dotnet add package Lite.Procedures.Contracts
+dotnet add package Lite.Procedures
+dotnet add package Lite.Procedures.DependencyInjection
+```
+
+```csharp
+public sealed record EchoRequest(string Value);
+public sealed record EchoResponse(string Value);
+
+public sealed class EchoProcedure : IAsyncProcedure<EchoRequest, EchoResponse>
+{
+    public ValueTask<EchoResponse> ExecuteAsync(EchoRequest arguments, CancellationToken cancellationToken = default)
+        => new(new EchoResponse(arguments.Value));
+}
+
+services.AddLiteProcedures(b => b.AddProcedure<EchoProcedure>());
+
+// где-то дальше, через DI:
+var procedure = provider.GetRequiredService<IAsyncProcedure<EchoRequest, EchoResponse>>();
+var result = await procedure.ExecuteAsync(new EchoRequest("hi"));
+```
+
+## Пакеты
+
+| Пакет | TFM | Что даёт |
+|---|---|---|
+| `Lite.Procedures.Contracts` | netstandard2.1 | Контракты: `IAsyncProcedure<,>`, `IProcedure<,>` (sync), `[InterceptWith]` |
+| `Lite.Procedures` | netstandard2.1 | Рантайм пайплайна + конфигурация (`AddProcedure`, интерцепторы) |
+| `Lite.Procedures.DependencyInjection` | netstandard2.1 | `AddLiteProcedures(...)` — обвязка Microsoft.Extensions.DependencyInjection |
+| `Lite.Procedures.DotNet` | net10.0 | Generic-атрибут `[InterceptWith<T>]` для современного .NET |
+| `Lite.Procedures.Pipeline.SourceGenerators` | netstandard2.0 | Кодоген `FastPipeline` — разворачивает атрибутную цепочку интерцепторов в конкретный код без reflection |
+
 ## Установка окружения
 
 - **.NET SDK 10** — [скачать](https://dotnet.microsoft.com/download).
@@ -41,14 +76,3 @@ dotnet test Lite.Procedures.sln -c Release --no-build
 ## Бенчмарки
 
 См. [BENCHMARKS.md](BENCHMARKS.md).
-
-## Плейграунд (реальное приложение)
-
-Минимальное ASP.NET Core приложение с Lite.Procedures — процедуры, контроллеры, DI (по аналогии с [Lite.Validation playground](https://github.com/lite-dotnet/Lite.Validation)):
-
-```bash
-dotnet run --project playground/Lite.Procedures.Playground/Lite.Procedures.Playground.csproj
-```
-
-- **GET /echo?q=...** — вызов процедуры Echo (возвращает строку).
-- **POST /order** — тело `{ "productName": "...", "quantity": 1, "price": 10.5 }`, возвращает созданный заказ.

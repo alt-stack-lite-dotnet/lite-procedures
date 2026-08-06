@@ -1,7 +1,7 @@
 using Lite.Procedures;
 using Lite.Procedures.Configuration;
 using Lite.Procedures.DependencyInjection;
-using Lite.Procedures.Pipeline.Interception;
+using Lite.Procedures.Interception;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Lite.Procedures.Test;
@@ -85,6 +85,60 @@ public class BuilderRegistrationTests
         await procedure.ExecuteAsync(new TestRequest("x"), CancellationToken.None);
 
         Assert.Equal(new[] { "A:before", "A:after" }, probe.Log);
+    }
+
+    [Fact]
+    public void AddProcedure_SameInterceptorType_SharedPlusAttribute_NoInstance_Throws()
+    {
+        var probe = new InterceptorOrderProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            services.AddLiteProcedures(b => b
+                .UseInterceptor<TrackingA>()
+                .AddProcedure<EchoProcedure>(p => p.UseInterceptor<TrackingA>())));
+
+        Assert.Contains("TrackingA", ex.Message);
+        Assert.Contains("EchoProcedure", ex.Message);
+    }
+
+    [Fact]
+    public void AddProcedure_SameInterceptorType_DistinctInstances_DoesNotThrow()
+    {
+        var probe = new InterceptorOrderProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+
+        // Two distinct explicit instances of the same type is plausibly intentional -> allowed.
+        services.AddLiteProcedures(b => b.AddProcedure<EchoProcedure>(p =>
+        {
+            p.UseInterceptor(new TrackingA(probe), priority: 0);
+            p.UseInterceptor(new TrackingA(probe), priority: 1);
+        }));
+    }
+
+    [Fact]
+    public async Task AddProcedure_CalledTwiceInSameScope_MergesInterceptors_DoesNotDropEither()
+    {
+        var probe = new InterceptorOrderProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddLiteProcedures(b =>
+        {
+            b.AddProcedure<EchoProcedure>(p => p.UseInterceptor<TrackingA>());
+            // Same procedure, second call in the same scope — must merge with the first, not replace
+            // or silently drop it.
+            b.AddProcedure<EchoProcedure>(p => p.UseInterceptor<TrackingB>());
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetRequiredService<IAsyncProcedure<TestRequest, TestResponse>>();
+
+        await procedure.ExecuteAsync(new TestRequest("x"), CancellationToken.None);
+
+        // Equal (default) priority -> stable order: first call's interceptor stays outermost.
+        Assert.Equal(new[] { "A:before", "B:before", "B:after", "A:after" }, probe.Log);
     }
 
     [Fact]

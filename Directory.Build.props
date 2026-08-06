@@ -16,7 +16,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>mediator;pipeline;interceptors;cqrs;source-generator;aot;dependency-injection</PackageTags>
+    <PackageTags>mediator;pipeline;interceptors;handlers;source-generator;aot;dependency-injection</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <IncludeSymbols>true</IncludeSymbols>

@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <Description>Procedure pipeline runtime and configuration for Lite.Procedures (async and sync).</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <InternalsVisibleTo Include="Lite.Procedures.DependencyInjection" />
+      <InternalsVisibleTo Include="Lite.Procedures.Test" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Lite.Procedures.Contracts\Lite.Procedures.Contracts.csproj" />
+    </ItemGroup>
+
+</Project>

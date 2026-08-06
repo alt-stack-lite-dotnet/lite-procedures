@@ -12,8 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Lite.Procedures.Configuration\Lite.Procedures.Configuration.csproj" />
-      <ProjectReference Include="..\Lite.Procedures.Pipeline\Lite.Procedures.Pipeline.csproj" />
+      <ProjectReference Include="..\Lite.Procedures\Lite.Procedures.csproj" />
     </ItemGroup>
 
 </Project>

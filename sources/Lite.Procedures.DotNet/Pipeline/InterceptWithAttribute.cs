@@ -1,8 +1,8 @@
-﻿using Lite.Procedures.Pipeline.Interception;
+﻿using Lite.Procedures.Interception;
 
-namespace Lite.Procedures.Pipeline;
+namespace Lite.Procedures;
 
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class InterceptWithAttribute<TInterceptor>()
-    : Lite.Procedures.Pipeline.Interception.InterceptWithAttribute(typeof(TInterceptor))
+    : Lite.Procedures.Interception.InterceptWithAttribute(typeof(TInterceptor))
     where TInterceptor : IInterceptorCore;

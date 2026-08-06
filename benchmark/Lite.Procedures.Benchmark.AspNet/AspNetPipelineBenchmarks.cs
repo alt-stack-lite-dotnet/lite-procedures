@@ -4,8 +4,7 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using Lite.Procedures;
 using Lite.Procedures.DependencyInjection;
-using Lite.Procedures.Pipeline;
-using Lite.Procedures.Pipeline.Interceptors;
+using Lite.Procedures.Interception;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Lite.Procedures.Benchmark.AspNet;

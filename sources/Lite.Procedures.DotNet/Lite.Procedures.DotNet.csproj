@@ -6,11 +6,11 @@
         <Nullable>enable</Nullable>
         <RootNamespace>Lite.Procedures</RootNamespace>
         <IsPackable>true</IsPackable>
-        <Description>Convenience attributes and helpers for Lite.Procedures on modern .NET (generic [InterceptWith&lt;T&gt;], RPC attributes).</Description>
+        <Description>Convenience attributes and helpers for Lite.Procedures on modern .NET (generic [InterceptWith&lt;T&gt;]).</Description>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Lite.Procedures.Abstractions\Lite.Procedures.Abstractions.csproj" />
+      <ProjectReference Include="..\Lite.Procedures.Contracts\Lite.Procedures.Contracts.csproj" />
     </ItemGroup>
 
 </Project>

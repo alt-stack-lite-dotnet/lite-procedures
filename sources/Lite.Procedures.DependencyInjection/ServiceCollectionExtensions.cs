@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
 using Lite.Procedures.Configuration;
-using Lite.Procedures.Pipeline;
-using Lite.Procedures.Pipeline.Assembling;
+using Lite.Procedures;
+using Lite.Procedures.Assembling;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 

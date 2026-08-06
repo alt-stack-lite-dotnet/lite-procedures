@@ -5,7 +5,7 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Toolchains.InProcess.Emit;
 using Lite.Procedures.DependencyInjection;
-using Lite.Procedures.Pipeline.Interception;
+using Lite.Procedures.Interception;
 using MediatR;
 using MessagePipe;
 using Microsoft.Extensions.DependencyInjection;

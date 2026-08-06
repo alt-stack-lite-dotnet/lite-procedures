@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Lite.Procedures</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <Description>Procedure and interceptor contracts for Lite.Procedures (no runtime logic).</Description>
+    </PropertyGroup>
+
+</Project>

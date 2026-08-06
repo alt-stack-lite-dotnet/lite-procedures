@@ -1,384 +1,48 @@
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Lite.Procedures.Pipeline.SourceGenerators
 {
+    /// <summary>
+    /// Orchestrator: finds candidate procedure classes (<see cref="ProcedureInfoExtractor"/>), reports
+    /// any skip/degrade diagnostics, and emits the generated factories/FastPipelines/module-initializer
+    /// (<see cref="ProcedureCodeEmitter"/>) for the ones that qualified.
+    /// </summary>
     [Generator]
     public sealed class ProcedureFactoryGenerator : IIncrementalGenerator
     {
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            var procedures = context.SyntaxProvider
+            var results = context.SyntaxProvider
                 .CreateSyntaxProvider(
                     predicate: static (node, _) =>
                         node is ClassDeclarationSyntax c
                         && c.BaseList is { Types.Count: > 0 }
                         && !c.Modifiers.Any(static m => m.ValueText == "abstract"),
-                    transform: TryExtractProcedureInfo)
-                .Where(static p => p is not null)
-                .Select(static (p, _) => p!)
+                    transform: static (ctx, ct) => ProcedureInfoExtractor.TryExtract(ctx, ct))
                 .Collect();
 
-            context.RegisterSourceOutput(procedures, Emit);
+            context.RegisterSourceOutput(results, Emit);
         }
 
-        private static ProcedureInfo? TryExtractProcedureInfo(GeneratorSyntaxContext ctx, CancellationToken ct)
+        private static void Emit(SourceProductionContext context, ImmutableArray<ExtractionResult> results)
         {
-            if (ctx.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)ctx.Node, ct) is not INamedTypeSymbol symbol)
-                return null;
+            foreach (var result in results)
+                foreach (var diagnostic in result.Diagnostics)
+                    context.ReportDiagnostic(diagnostic);
 
-            if (symbol.IsAbstract || symbol.IsStatic || symbol.TypeKind != TypeKind.Class)
-                return null;
-
-            if (symbol.IsGenericType)
-                return null;
-
-            ITypeSymbol? argsType = null;
-            ITypeSymbol? resultType = null;
-            bool? isAsync = null;
-
-            foreach (var iface in symbol.AllInterfaces)
-            {
-                if (iface.TypeArguments.Length != 2) continue;
-                var def = iface.OriginalDefinition;
-                if (def.ContainingNamespace.ToDisplayString() != "Lite.Procedures") continue;
-
-                if (def.Name == "IAsyncProcedure")
-                {
-                    argsType = iface.TypeArguments[0];
-                    resultType = iface.TypeArguments[1];
-                    isAsync = true;
-                    break;
-                }
-
-                if (def.Name == "IProcedure")
-                {
-                    argsType = iface.TypeArguments[0];
-                    resultType = iface.TypeArguments[1];
-                    isAsync = false;
-                    break;
-                }
-            }
-
-            if (argsType == null || resultType == null || isAsync == null) return null;
-
-            // The generated factory/pipeline are top-level types in the same assembly. They can only
-            // reference the procedure, its argument/result types, and its interceptors if those are
-            // visible at assembly scope (public/internal). Skip anything narrower (e.g. private nested
-            // test fixtures) — such procedures fall back to the reflection bridge at runtime.
-            if (!IsAssemblyVisible(symbol) || !IsAssemblyVisible(argsType) || !IsAssemblyVisible(resultType))
-                return null;
-
-            var attrs = ExtractInterceptorAttributes(symbol);
-
-            // A fast path requires every interceptor in the chain to be referenceable by name.
-            // If any isn't, drop the whole attribute set so we emit a fallback-only factory.
-            if (attrs.Any(static a => !IsAssemblyVisible(a)))
-                attrs.Clear();
-
-            return new ProcedureInfo(symbol, argsType, resultType, isAsync.Value, attrs);
-        }
-
-        private static bool IsAssemblyVisible(ITypeSymbol? type)
-        {
-            switch (type)
-            {
-                case null:
-                    return false;
-                case IArrayTypeSymbol array:
-                    return IsAssemblyVisible(array.ElementType);
-                case INamedTypeSymbol named:
-                    for (var current = named; current != null; current = current.ContainingType)
-                    {
-                        switch (current.DeclaredAccessibility)
-                        {
-                            case Accessibility.Public:
-                            case Accessibility.Internal:
-                            case Accessibility.ProtectedOrInternal:
-                                break;
-                            default:
-                                return false;
-                        }
-                    }
-
-                    foreach (var argument in named.TypeArguments)
-                        if (!IsAssemblyVisible(argument))
-                            return false;
-
-                    return true;
-                default:
-                    // Type parameters, pointers, etc. — generic procedures are already excluded upstream.
-                    return true;
-            }
-        }
-
-        private static List<INamedTypeSymbol> ExtractInterceptorAttributes(INamedTypeSymbol procedure)
-        {
-            var result = new List<INamedTypeSymbol>();
-            foreach (var attr in procedure.GetAttributes())
-            {
-                var attrClass = attr.AttributeClass;
-                if (attrClass == null) continue;
-
-                // Generic [InterceptWithAttribute<T>]: take T from attrClass.TypeArguments
-                if (attrClass.IsGenericType
-                    && attrClass.OriginalDefinition.Name == "InterceptWithAttribute"
-                    && attrClass.TypeArguments.Length == 1
-                    && attrClass.TypeArguments[0] is INamedTypeSymbol genArg)
-                {
-                    result.Add(genArg);
-                    continue;
-                }
-
-                // Non-generic [InterceptWithAttribute(typeof(X))]: take ctor arg
-                if (!attrClass.IsGenericType
-                    && attrClass.Name == "InterceptWithAttribute"
-                    && attr.ConstructorArguments.Length == 1
-                    && attr.ConstructorArguments[0].Value is INamedTypeSymbol typeofArg)
-                {
-                    result.Add(typeofArg);
-                }
-            }
-            return result;
-        }
-
-        private static void Emit(SourceProductionContext context, ImmutableArray<ProcedureInfo> procedures)
-        {
-            if (procedures.IsDefaultOrEmpty) return;
-
-            var unique = procedures
+            var procedures = results
+                .Where(static r => r.Info is not null)
+                .Select(static r => r.Info!)
                 .GroupBy(static p => p.Procedure, SymbolEqualityComparer.Default)
                 .Select(static g => g.First())
                 .ToList();
 
-            var sb = new StringBuilder();
-            sb.AppendLine("// <auto-generated/>");
-            sb.AppendLine("#nullable enable");
-            sb.AppendLine("#pragma warning disable");
-            sb.AppendLine();
-            sb.AppendLine("namespace Lite.Procedures.Generated");
-            sb.AppendLine("{");
+            if (procedures.Count == 0) return;
 
-            foreach (var p in unique)
-            {
-                if (p.Attributes.Count > 0)
-                    EmitFastPipeline(sb, p);
-                EmitFactory(sb, p);
-            }
-
-            EmitModuleInitializer(sb, unique);
-
-            sb.AppendLine("}");
-
-            context.AddSource("LiteProceduresGenerated.g.cs", sb.ToString());
-        }
-
-        // Unrolled, concrete-typed pipeline (no closures, no abstract dispatch). Generated only
-        // when the interceptor chain is statically known via [InterceptWith] attributes. JIT can
-        // devirtualize + inline every hop — this is what matches/beats MessagePipe's filter chain.
-        private static void EmitFastPipeline(StringBuilder sb, ProcedureInfo p)
-        {
-            var procFqn = p.Procedure.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var argsFqn = p.Args.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var resultFqn = p.Result.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var className = "FastPipeline_" + EscapeIdentifier(p.Procedure.ToDisplayString());
-            var n = p.Attributes.Count;
-
-            var ifaceType = p.IsAsync
-                ? $"global::Lite.Procedures.IAsyncProcedure<{argsFqn}, {resultFqn}>"
-                : $"global::Lite.Procedures.IProcedure<{argsFqn}, {resultFqn}>";
-            var nextType = p.IsAsync
-                ? $"global::System.Func<{argsFqn}, global::System.Threading.CancellationToken, global::System.Threading.Tasks.ValueTask<{resultFqn}>>"
-                : $"global::System.Func<{argsFqn}, {resultFqn}>";
-            var retType = p.IsAsync
-                ? $"global::System.Threading.Tasks.ValueTask<{resultFqn}>"
-                : resultFqn;
-            var procMethod = p.IsAsync ? "ExecuteAsync" : "Execute";
-            var icMethod = p.IsAsync ? "InvokeAsync" : "Invoke";
-            const string aggressive = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
-
-            string headSig = p.IsAsync
-                ? $"public {retType} ExecuteAsync({argsFqn} arguments, global::System.Threading.CancellationToken cancellationToken)"
-                : $"public {retType} Execute({argsFqn} arguments)";
-            string Call(string field, string next) => p.IsAsync
-                ? $"{field}.{icMethod}(arguments, {next}, cancellationToken)"
-                : $"{field}.{icMethod}(arguments, {next})";
-
-            sb.Append("    internal sealed class ").Append(className).Append(" : ").AppendLine(ifaceType);
-            sb.AppendLine("    {");
-            sb.AppendLine($"        private readonly {procFqn} _procedure;");
-            for (var i = 0; i < n; i++)
-                sb.AppendLine($"        private readonly {p.Attributes[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} _i{i};");
-            sb.AppendLine($"        private readonly {nextType} _terminal;");
-            for (var i = 1; i < n; i++)
-                sb.AppendLine($"        private readonly {nextType} _step{i};");
-            sb.AppendLine();
-
-            sb.Append($"        public {className}({procFqn} procedure");
-            for (var i = 0; i < n; i++)
-                sb.Append($", {p.Attributes[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} i{i}");
-            sb.AppendLine(")");
-            sb.AppendLine("        {");
-            sb.AppendLine("            _procedure = procedure;");
-            for (var i = 0; i < n; i++) sb.AppendLine($"            _i{i} = i{i};");
-            sb.AppendLine($"            _terminal = _procedure.{procMethod};");
-            for (var i = 1; i < n; i++) sb.AppendLine($"            _step{i} = Step{i};");
-            sb.AppendLine("        }");
-            sb.AppendLine();
-
-            sb.AppendLine($"        {aggressive}");
-            sb.AppendLine($"        {headSig}");
-            sb.AppendLine($"            => {Call("_i0", n > 1 ? "_step1" : "_terminal")};");
-
-            for (var i = 1; i < n; i++)
-            {
-                var next = i == n - 1 ? "_terminal" : $"_step{i + 1}";
-                var stepSig = p.IsAsync
-                    ? $"private {retType} Step{i}({argsFqn} arguments, global::System.Threading.CancellationToken cancellationToken)"
-                    : $"private {retType} Step{i}({argsFqn} arguments)";
-                sb.AppendLine();
-                sb.AppendLine($"        {aggressive}");
-                sb.AppendLine($"        {stepSig}");
-                sb.AppendLine($"            => {Call($"_i{i}", next)};");
-            }
-
-            sb.AppendLine("    }");
-            sb.AppendLine();
-        }
-
-        private static void EmitFactory(StringBuilder sb, ProcedureInfo p)
-        {
-            var procFqn = p.Procedure.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var argsFqn = p.Args.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var resultFqn = p.Result.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var factoryName = "Factory_" + EscapeIdentifier(p.Procedure.ToDisplayString());
-            var fastName = "FastPipeline_" + EscapeIdentifier(p.Procedure.ToDisplayString());
-
-            var pipelineType = p.IsAsync
-                ? $"global::Lite.Procedures.Pipeline.AsyncProcedurePipeline<{argsFqn}, {resultFqn}>"
-                : $"global::Lite.Procedures.Pipeline.ProcedurePipeline<{argsFqn}, {resultFqn}>";
-
-            var procedureInterfaceType = p.IsAsync
-                ? $"global::Lite.Procedures.IAsyncProcedure<{argsFqn}, {resultFqn}>"
-                : $"global::Lite.Procedures.IProcedure<{argsFqn}, {resultFqn}>";
-
-            var interceptorBaseType = p.IsAsync
-                ? $"global::Lite.Procedures.Pipeline.Interception.AsyncInterceptor<{argsFqn}, {resultFqn}>"
-                : $"global::Lite.Procedures.Pipeline.Interception.Interceptor<{argsFqn}, {resultFqn}>";
-
-            sb.Append("    internal sealed class ").Append(factoryName)
-              .AppendLine(" : global::Lite.Procedures.Pipeline.IProcedurePipelineFactory");
-            sb.AppendLine("    {");
-            sb.AppendLine($"        public global::System.Type ProcedureType => typeof({procFqn});");
-            sb.AppendLine($"        public global::System.Type ProcedureInterfaceType => typeof({procedureInterfaceType});");
-            sb.AppendLine();
-            sb.AppendLine("        public object Assemble(");
-            sb.AppendLine("            global::System.IServiceProvider services,");
-            sb.AppendLine("            global::System.Collections.Generic.IReadOnlyList<(global::System.Type InterceptorType, int Priority)> interceptors)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            var ordered = global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.OrderBy(interceptors, x => x.Priority));");
-            sb.AppendLine();
-
-            // No interceptors -> no pipeline. Return the bare procedure so dispatch is a single hop
-            // into the handler with no wrapper delegate (matches MessagePipe's raw-handler fast path).
-            sb.AppendLine("            if (ordered.Length == 0)");
-            sb.AppendLine($"                return ({procedureInterfaceType})(services.GetService(typeof({procFqn}))");
-            sb.AppendLine($"                    ?? throw new global::System.InvalidOperationException(\"Procedure service not registered: {procFqn}\"));");
-            sb.AppendLine();
-
-            // Fast path: the runtime chain matches the compile-time [InterceptWith] chain exactly.
-            if (p.Attributes.Count > 0)
-            {
-                sb.Append($"            if (ordered.Length == {p.Attributes.Count}");
-                for (var i = 0; i < p.Attributes.Count; i++)
-                {
-                    var aFqn = p.Attributes[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    sb.Append($" && ordered[{i}].InterceptorType == typeof({aFqn})");
-                }
-                sb.AppendLine(")");
-                sb.AppendLine("            {");
-                sb.AppendLine($"                var fp = ({procFqn})(services.GetService(typeof({procFqn}))");
-                sb.AppendLine($"                    ?? throw new global::System.InvalidOperationException(\"Procedure service not registered: {procFqn}\"));");
-                for (var i = 0; i < p.Attributes.Count; i++)
-                {
-                    var aFqn = p.Attributes[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    sb.AppendLine($"                var i{i} = ({aFqn})(services.GetService(typeof({aFqn}))");
-                    sb.AppendLine($"                    ?? throw new global::System.InvalidOperationException(\"Interceptor service not registered: {aFqn}\"));");
-                }
-                sb.Append($"                return new {fastName}(fp");
-                for (var i = 0; i < p.Attributes.Count; i++) sb.Append($", i{i}");
-                sb.AppendLine(");");
-                sb.AppendLine("            }");
-                sb.AppendLine();
-            }
-
-            // Fallback: runtime closure pipeline for any other chain.
-            sb.AppendLine($"            var procedure = ({procedureInterfaceType})(services.GetService(typeof({procFqn}))");
-            sb.AppendLine($"                ?? throw new global::System.InvalidOperationException(\"Procedure service not registered: {procFqn}\"));");
-            sb.AppendLine($"            var arr = new {interceptorBaseType}[ordered.Length];");
-            sb.AppendLine("            for (int i = 0; i < arr.Length; i++)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                var instance = services.GetService(ordered[i].InterceptorType)");
-            sb.AppendLine("                    ?? throw new global::System.InvalidOperationException(");
-            sb.AppendLine("                        \"Interceptor service not registered: \" + ordered[i].InterceptorType.FullName);");
-            sb.AppendLine($"                arr[i] = ({interceptorBaseType})instance;");
-            sb.AppendLine("            }");
-            sb.AppendLine($"            return new {pipelineType}(procedure, arr);");
-            sb.AppendLine("        }");
-            sb.AppendLine("    }");
-            sb.AppendLine();
-        }
-
-        private static void EmitModuleInitializer(StringBuilder sb, IList<ProcedureInfo> procedures)
-        {
-            sb.AppendLine("    internal static class GeneratedFactoriesRegistration");
-            sb.AppendLine("    {");
-            sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
-            sb.AppendLine("        internal static void Register()");
-            sb.AppendLine("        {");
-            foreach (var p in procedures)
-            {
-                var className = "Factory_" + EscapeIdentifier(p.Procedure.ToDisplayString());
-                sb.AppendLine($"            global::Lite.Procedures.Pipeline.PipelineFactoryRegistry.Register(new {className}());");
-            }
-            sb.AppendLine("        }");
-            sb.AppendLine("    }");
-        }
-
-        private static string EscapeIdentifier(string fullName)
-        {
-            var sb = new StringBuilder(fullName.Length);
-            foreach (var ch in fullName)
-            {
-                if (char.IsLetterOrDigit(ch) || ch == '_')
-                    sb.Append(ch);
-                else
-                    sb.Append('_');
-            }
-            return sb.ToString();
-        }
-
-        private sealed class ProcedureInfo
-        {
-            public ProcedureInfo(INamedTypeSymbol procedure, ITypeSymbol args, ITypeSymbol result, bool isAsync, List<INamedTypeSymbol> attributes)
-            {
-                Procedure = procedure;
-                Args = args;
-                Result = result;
-                IsAsync = isAsync;
-                Attributes = attributes;
-            }
-
-            public INamedTypeSymbol Procedure { get; }
-            public ITypeSymbol Args { get; }
-            public ITypeSymbol Result { get; }
-            public bool IsAsync { get; }
-            public List<INamedTypeSymbol> Attributes { get; }
+            context.AddSource("LiteProceduresGenerated.g.cs", ProcedureCodeEmitter.EmitSource(procedures));
         }
     }
 }
