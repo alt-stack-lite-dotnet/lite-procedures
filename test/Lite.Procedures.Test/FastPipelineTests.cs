@@ -62,4 +62,43 @@ public class FastPipelineTests
         public override ValueTask<string> InvokeAsync(FastReq a, Func<FastReq, CancellationToken, ValueTask<string>> next, CancellationToken ct)
         { _probe.Add("B"); return next(a, ct); }
     }
+
+    // Generic [InterceptWith<T>] (Lite.Procedures.DotNet) form — everything above only ever
+    // exercises the non-generic [InterceptWith(typeof(X))] form.
+    [Fact]
+    public void GenericAttributeChain_ResolvesToGeneratedFastPipeline()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new List<string>());
+        services.AddLiteProcedures(b => b.AddProcedure<GenericFastProc>());
+
+        using var sp = services.BuildServiceProvider();
+        var pipeline = sp.GetRequiredService<IAsyncProcedure<FastReq, string>>();
+
+        Assert.StartsWith("FastPipeline_", pipeline.GetType().Name);
+    }
+
+    [Fact]
+    public async Task GenericAttributeChain_RunsInterceptorsInOrder()
+    {
+        var probe = new List<string>();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddLiteProcedures(b => b.AddProcedure<GenericFastProc>());
+
+        using var sp = services.BuildServiceProvider();
+        var pipeline = sp.GetRequiredService<IAsyncProcedure<FastReq, string>>();
+        var result = await pipeline.ExecuteAsync(new FastReq("x"), CancellationToken.None);
+
+        Assert.Equal("x", result);
+        Assert.Equal(new[] { "A", "B" }, probe);
+    }
+
+    [InterceptWith<TrackA>]
+    [InterceptWith<TrackB>]
+    public sealed class GenericFastProc : IAsyncProcedure<FastReq, string>
+    {
+        public ValueTask<string> ExecuteAsync(FastReq arguments, CancellationToken cancellationToken = default)
+            => new(arguments.Value);
+    }
 }

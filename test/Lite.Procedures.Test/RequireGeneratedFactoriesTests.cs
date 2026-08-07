@@ -45,4 +45,26 @@ public class RequireGeneratedFactoriesTests
         Assert.Contains("GenericProc", ex.Message);
         Assert.Contains("RequireGeneratedFactories", ex.Message);
     }
+
+    // Sync mirror: the reflection bridge used to hardcode IAsyncProcedure<,> and throw for any
+    // sync procedure landing in the fallback path. Same "generic -> no generated factory" trick
+    // to force the fallback deterministically.
+    public sealed class GenericSyncProc<T> : IProcedure<Req<T>, T>
+    {
+        public T Execute(Req<T> arguments) => arguments.Value;
+    }
+
+    [Fact]
+    public void Sync_WithoutRequireGeneratedFactories_FallsBackToReflectionBridge_AndStillWorks()
+    {
+        var services = new ServiceCollection();
+        services.AddLiteProcedures(b => b.AddProcedure<GenericSyncProc<int>>());
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetRequiredService<IProcedure<Req<int>, int>>();
+
+        var result = procedure.Execute(new Req<int>(42));
+
+        Assert.Equal(42, result);
+    }
 }

@@ -229,3 +229,112 @@ public class BuilderRegistrationTests
         }
     }
 }
+
+// Sync mirror of BuilderRegistrationTests — same DI/builder scenarios, IProcedure<,> instead of
+// IAsyncProcedure<,>. Sync procedures were never exercised through AddLiteProcedures before.
+public class SyncBuilderRegistrationTests
+{
+    [Fact]
+    public void AddProcedure_ResolvesAsProcedureInterface()
+    {
+        var services = new ServiceCollection();
+        services.AddLiteProcedures(b => b.AddProcedure<EchoProcedure>());
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetService<IProcedure<TestRequest, TestResponse>>();
+
+        Assert.NotNull(procedure);
+    }
+
+    [Fact]
+    public void AddProcedure_NoInterceptors_Invokes()
+    {
+        var services = new ServiceCollection();
+        services.AddLiteProcedures(b => b.AddProcedure<EchoProcedure>());
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetRequiredService<IProcedure<TestRequest, TestResponse>>();
+
+        var result = procedure.Execute(new TestRequest("hi"));
+
+        Assert.Equal("hi", result.Value);
+    }
+
+    [Fact]
+    public void UseInterceptor_Shared_Applies()
+    {
+        var probe = new InterceptorOrderProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddLiteProcedures(b => b
+            .UseInterceptor<TrackingA>()
+            .AddProcedure<EchoProcedure>());
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetRequiredService<IProcedure<TestRequest, TestResponse>>();
+
+        procedure.Execute(new TestRequest("x"));
+
+        Assert.Equal(new[] { "A:before", "A:after" }, probe.Log);
+    }
+
+    [Fact]
+    public void AddProcedure_SharedPlusPerProcedure_MergeAndOrderByPriority()
+    {
+        var probe = new InterceptorOrderProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddLiteProcedures(b => b
+            .UseInterceptor<TrackingB>(priority: 10)
+            .AddProcedure<EchoProcedure>(p => p.UseInterceptor<TrackingA>(priority: 0)));
+
+        using var sp = services.BuildServiceProvider();
+        var procedure = sp.GetRequiredService<IProcedure<TestRequest, TestResponse>>();
+
+        procedure.Execute(new TestRequest("x"));
+
+        // Lower priority is outer: A(0) wraps B(10).
+        Assert.Equal(new[] { "A:before", "B:before", "B:after", "A:after" }, probe.Log);
+    }
+
+    // --- Fixtures ---
+
+    public sealed record TestRequest(string Value);
+    public sealed record TestResponse(string Value);
+
+    public sealed class EchoProcedure : IProcedure<TestRequest, TestResponse>
+    {
+        public TestResponse Execute(TestRequest arguments) => new(arguments.Value);
+    }
+
+    public sealed class InterceptorOrderProbe
+    {
+        public List<string> Log { get; } = new();
+    }
+
+    public sealed class TrackingA : Interceptor<TestRequest, TestResponse>
+    {
+        private readonly InterceptorOrderProbe _probe;
+        public TrackingA(InterceptorOrderProbe probe) => _probe = probe;
+        public override TestResponse Invoke(TestRequest arguments, Func<TestRequest, TestResponse> next)
+        {
+            _probe.Log.Add("A:before");
+            var r = next(arguments);
+            _probe.Log.Add("A:after");
+            return r;
+        }
+    }
+
+    public sealed class TrackingB : Interceptor<TestRequest, TestResponse>
+    {
+        private readonly InterceptorOrderProbe _probe;
+        public TrackingB(InterceptorOrderProbe probe) => _probe = probe;
+        public override TestResponse Invoke(TestRequest arguments, Func<TestRequest, TestResponse> next)
+        {
+            _probe.Log.Add("B:before");
+            var r = next(arguments);
+            _probe.Log.Add("B:after");
+            return r;
+        }
+    }
+}
